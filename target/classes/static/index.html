@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TBR Charm</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background: #fdf6f9;
+      color: #333;
+      max-width: 600px;
+      margin: auto;
+    }
+
+    h1 {
+      color: #c94f7c;
+    }
+
+    label {
+      display: block;
+      margin: 1rem 0 0.5rem;
+    }
+
+    input[type="file"] {
+      margin-bottom: 1rem;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      background-color: #c94f7c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .result {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    img {
+      max-height: 200px;
+      margin-top: 1rem;
+      display: block;
+    }
+
+    .loading {
+      margin-top: 1rem;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📚 TBR Charm</h1>
+  <p>Upload your Goodreads "Want to Read" list (.csv) to pick a random book!</p>
+  <p>Learn how to download your .csv file <a href="https://tinyurl.com/5xr8yuvv">here</a></p>
+
+  <form id="uploadForm">
+    <label for="fileInput">Choose your Goodreads CSV file:</label>
+    <input type="file" id="fileInput" name="file" accept=".csv" required>
+    <button type="submit">Shuffle!</button>
+  </form>
+
+  <div id="result" class="result" style="display: none;"></div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const resultDiv = document.getElementById('result');
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert("Please select a CSV file.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      resultDiv.innerHTML = "<p class='loading'>Shuffling your books...</p>";
+      resultDiv.style.display = "block";
+
+      try {
+        const response = await fetch('/api/shuffle', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          resultDiv.innerHTML = `<strong>Error:</strong> ${errorText}`;
+          return;
+        }
+
+        const book = await response.json();
+
+        let html = `<h2>🎉 Your Random Book</h2>`;
+        html += `<p><strong>Title:</strong> ${book.title}</p>`;
+        html += `<p><strong>Author:</strong> ${book.author}</p>`;
+
+        const coverUrl = await fetchCoverImage(book);
+        const fallbackCover = "https://via.placeholder.com/150x200?text=No+Cover";
+
+        html += `<img src="${coverUrl || fallbackCover}" alt="Book Cover">`;
+
+        resultDiv.innerHTML = html;
+
+      } catch (err) {
+        resultDiv.innerHTML = `<strong>Unexpected error:</strong> ${err.message}`;
+      }
+    });
+
+    async function fetchCoverImage(book) {
+      const title = encodeURIComponent(book.title);
+      const author = encodeURIComponent(book.author);
+      const url = `https://openlibrary.org/search.json?title=${title}&author=${author}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.docs && data.docs.length > 0) {
+          const doc = data.docs[0];
+          if (doc.cover_i) {
+            const coverId = doc.cover_i;
+            return `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`;
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching cover:", e);
+      }
+
+      return null;
+    }
+  </script>
+
+</body>
+</html>
